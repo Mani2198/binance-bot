@@ -1,3 +1,5 @@
-python-binance
 pandas
+binance-connector
+python-binance
 ta
+flask
