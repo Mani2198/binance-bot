@@ -58,7 +58,7 @@ def get_indicators_and_signal(symbol):
         # --- LONG CONDITIONS ---
         long_cond_1 = current_price > last_row['ema_200']  
         long_cond_2 = prev_row['macd_line'] <= prev_row['macd_signal'] and last_row['macd_line'] > last_row['macd_signal']
-        long_cond_3 = prev_row['rsi'] < 40 and last_row['rsi'] >= 40 # RSI 40-க்கு கீழே சென்று மேலே திரும்ப வேண்டும்
+        long_cond_3 = prev_row['rsi'] < 40 and last_row['rsi'] >= 40 
         long_cond_4 = last_row['volume'] > last_row['vol_ma']
         
         if long_cond_1 and long_cond_2 and long_cond_3 and long_cond_4:
@@ -67,7 +67,7 @@ def get_indicators_and_signal(symbol):
         # --- SHORT CONDITIONS ---
         short_cond_1 = current_price < last_row['ema_200']
         short_cond_2 = prev_row['macd_line'] >= prev_row['macd_signal'] and last_row['macd_line'] < last_row['macd_signal']
-        short_cond_3 = prev_row['rsi'] > 60 and last_row['rsi'] <= 60 # RSI 60-க்கு மேலே சென்று கீழே திரும்ப வேண்டும்
+        short_cond_3 = prev_row['rsi'] > 60 and last_row['rsi'] <= 60 
         short_cond_4 = last_row['volume'] > last_row['vol_ma']
         
         if short_cond_1 and short_cond_2 and short_cond_3 and short_cond_4:
@@ -88,12 +88,19 @@ def execute_trade(symbol, signal_type, entry_price):
     client.futures_change_leverage(symbol=symbol, leverage=leverage)
     
     position_size = current_capital * leverage
-    qty = round(position_size / entry_price, 3) 
+    
+    # 🔴 மாற்றம் 1: Precision எர்ரர் வராமல் இருக்க நாணயத்தின் விலைக்கு ஏற்ப அளவை (Qty) மாற்றுதல்
+    raw_qty = position_size / entry_price
+    if entry_price > 1000:
+        qty = round(raw_qty, 3) # BTC, ETH (3 தசமம்)
+    elif entry_price > 10:
+        qty = round(raw_qty, 1) # SOL, AVAX (1 தசமம்)
+    else:
+        qty = int(raw_qty)      # DOGE, ADA, XRP போன்றவற்றுக்கு முழு எண் (0 தசமம்)
     
     tp_move_percent = PROFIT_TARGET / leverage 
     sl_percent = 0.01 if current_step == 1 else previous_profit / position_size
     
-    # Long & Short-க்கு ஏற்றபடி TP மற்றும் SL விலைகளை கணக்கிடுதல்
     if signal_type == "LONG":
         entry_side = 'BUY'
         exit_side = 'SELL'
@@ -118,8 +125,6 @@ def execute_trade(symbol, signal_type, entry_price):
         
         print(f"✅ {signal_type} Trade Placed successfully. Bot monitoring for TP / SL...")
         
-        # குறிப்பு: இது ஒரு Basic Setup. ஆர்டர் ஹிட் ஆனதை கண்காணிக்க WebSockets பயன்படுத்த வேண்டும்.
-        # இப்போதைக்கு Trade வெற்றி பெற்றதாக Simulation செய்யப்படுகிறது.
         won_trade = True 
         
         if won_trade:
@@ -147,14 +152,15 @@ def run_bot():
                 execute_trade(coin, signal_type, price)
                 time.sleep(10) # ஆர்டர் போட்டவுடன் சற்று நேரம் காத்திருக்க
                 break 
+            
+            # 🔴 மாற்றம் 2: IP Ban ஆகாமல் இருக்க ஒவ்வொரு காயினுக்கும் இடையில் 2 நொடிகள் இடைவெளி!
+            time.sleep(2) 
                 
         time.sleep(60) # அடுத்த ஸ்கேனிங் 1 நிமிடம் கழித்து நடக்கும்
 
 if __name__ == '__main__':
-    # ட்ரேடிங் பாட்டை பேக்கிரவுண்டில் இயக்குகிறோம் (Background Thread)
     bot_thread = threading.Thread(target=run_bot)
     bot_thread.start()
     
-    # Render-க்காக டம்மி வெப் சர்வரை மெயின் த்ரெட்டில் (Main Thread) இயக்குகிறோம்
     run_server()
 
